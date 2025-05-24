@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Whac-A-Mole: Full Version</title>
+    <style>
+        body {
+            font-family: 'Comic Sans MS', Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: linear-gradient(to bottom, #87CEEB, #FFD700);
+            margin: 0;
+            min-height: 100vh;
+            justify-content: center;
+            color: #333;
+        }
+        #game-container {
+            background-color: #6B4E31;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.6);
+            text-align: center;
+            max-width: 400px;
+        }
+        #start-screen, #game-over-screen {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 20px;
+            border-radius: 10px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            width: 300px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.3);
+        }
+        #grid {
+            display: grid;
+            grid-template-columns: repeat(3, 100px);
+            gap: 15px;
+            margin: 20px auto;
+        }
+        .hole {
+            width: 100px;
+            height: 100px;
+            background-color: #4A3728;
+            border-radius: 50%;
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
+            border: 3px solid #3C2F2F;
+        }
+        .mole {
+            width: 100%;
+            height: 100%;
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" fill="#555"/><circle cx="35" cy="40" r="8" fill="#fff"/><circle cx="65" cy="40" r="8" fill="#fff"/><circle cx="50" cy="60" r="10" fill="#f88"/><path d="M40 75 L60 75" stroke="#000" stroke-width="3"/></svg>');
+            background-size: cover;
+            position: absolute;
+            bottom: -100%;
+            transition: bottom 0.3s ease;
+        }
+        .mole.up {
+            bottom: 0;
+        }
+        #score, #time-left, #high-score {
+            font-size: 24px;
+            margin: 10px;
+            color: #FFF;
+            text-shadow: 1px 1px 2px #000;
+        }
+        #leaderboard {
+            margin-top: 10px;
+            font-size: 18px;
+            color: #FFF;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        #start-button, #restart-button, .difficulty-button, #sound-toggle {
+            padding: 10px 20px;
+            font-size: 18px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            margin: 5px;
+            transition: background-color 0.3s;
+        }
+        #start-button:hover, #restart-button:hover, .difficulty-button:hover, #sound-toggle:hover {
+            background-color: #45a049;
+        }
+        #sound-toggle {
+            background-color: #FF6347;
+        }
+        #sound-toggle:hover {
+            background-color: #e55a3e;
+        }
+        .difficulty-button.active {
+            background-color: #FFD700;
+            color: #333;
+        }
+        h1 {
+            color: #FF4500;
+            text-shadow: 2px 2px 4px #000;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div id="start-screen">
+        <h1>Whac-A-Mole</h1>
+        <p>Choose Difficulty:</p>
+        <button class="difficulty-button" data-speed="1000">Easy</button>
+        <button class="difficulty-button active" data-speed="800">Medium</button>
+        <button class="difficulty-button" data-speed="500">Hard</button>
+        <button id="start-button">Start Game</button>
+        <button id="sound-toggle">Sound: On</button>
+    </div>
+    <div id="game-over-screen" style="display: none;">
+        <h1>Game Over!</h1>
+        <p id="final-score">Score: 0</p>
+        <button id="restart-button">Play Again</button>
+    </div>
+    <div id="game-container" style="display: none;">
+        <h1>Whac-A-Mole</h1>
+        <div id="score">Score: 0</div>
+        <div id="time-left">Time: 30</div>
+        <div id="high-score">High Score: 0</div>
+        <div id="leaderboard">Leaderboard:<br></div>
+        <div id="grid"></div>
+    </div>
+
+    <script>
+        const grid = document.getElementById('grid');
+        const scoreDisplay = document.getElementById('score');
+        const timeDisplay = document.getElementById('time-left');
+        const highScoreDisplay = document.getElementById('high-score');
+        const leaderboardDisplay = document.getElementById('leaderboard');
+        const startButton = document.getElementById('start-button');
+        const restartButton = document.getElementById('restart-button');
+        const startScreen = document.getElementById('start-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const finalScoreDisplay = document.getElementById('final-score');
+        const soundToggle = document.getElementById('sound-toggle');
+        const difficultyButtons = document.querySelectorAll('.difficulty-button');
+        let score = 0;
+        let timeLeft = 30;
+        let highScore = parseInt(localStorage.getItem('highScore')) || 0;
+        let leaderboard = JSON.parse(localStorage.getItem('leaderboard')) || [];
+        let gameInterval = null;
+        let moleInterval = null;
+        let moleSpeed = 800; // Default: Medium
+        let soundOn = true;
+        let isGameRunning = false;
+        const holes = [];
+        const moles = [];
+
+        // Initialize high score and leaderboard
+        highScoreDisplay.textContent = `High Score: ${highScore}`;
+        updateLeaderboard();
+
+        // Create 9 holes
+        for (let i = 0; i < 9; i++) {
+            const hole = document.createElement('div');
+            hole.classList.add('hole');
+            const mole = document.createElement('div');
+            mole.classList.add('mole');
+            hole.appendChild(mole);
+            grid.appendChild(hole);
+            holes.push(hole);
+            moles.push(mole);
+        }
+
+        // Sound effect (base64 WAV for offline use)
+        const hitSound = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
+
+        // Auto-save score to leaderboard
+        function saveScore() {
+            if (score > 0) { // Only save non-zero scores
+                const date = new Date().toLocaleString('en-US', { 
+                    year: 'numeric', 
+                    month: 'short', 
+                    day: 'numeric', 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                });
+                leaderboard.push({ score, date });
+                leaderboard.sort((a, b) => b.score - a.score);
+                leaderboard = leaderboard.slice(0, 5); // Keep top 5 scores
+                localStorage.setItem('leaderboard', JSON.stringify(leaderboard));
+                updateLeaderboard();
+            }
+        }
+
+        // Update leaderboard display
+        function updateLeaderboard() {
+            leaderboardDisplay.innerHTML = 'Leaderboard:<br>';
+            if (leaderboard.length === 0) {
+                leaderboardDisplay.innerHTML += 'No scores yet.<br>';
+            } else {
+                leaderboard.forEach(entry => {
+                    leaderboardDisplay.innerHTML += `${entry.score} - ${entry.date}<br>`;
+                });
+            }
+        }
+
+        // Whack mole
+        moles.forEach((mole, index) => {
+            mole.addEventListener('click', () => {
+                if (mole.classList.contains('up') && isGameRunning) {
+                    score += 10;
+                    scoreDisplay.textContent = `Score: ${score}`;
+                    mole.classList.remove('up');
+                    if (soundOn) {
+                        hitSound.currentTime = 0; // Reset sound to avoid overlap
+                        hitSound.play().catch(err => console.log('Sound play failed:', err));
+                    }
+                }
+            });
+        });
+
+        // Randomly pop up a mole
+        function popMole() {
+            if (!isGameRunning) return;
+            moles.forEach(mole => mole.classList.remove('up'));
+            const randomIndex = Math.floor(Math.random() * moles.length);
+            moles[randomIndex].classList.add('up');
+        }
+
+        // Reset game state
+        function resetGame() {
+            if (gameInterval) clearInterval(gameInterval);
+            if (moleInterval) clearInterval(moleInterval);
+            moles.forEach(mole => mole.classList.remove('up'));
+            score = 0;
+            timeLeft = 30;
+            scoreDisplay.textContent = `Score: ${score}`;
+            timeDisplay.textContent = `Time: ${timeLeft}`;
+            isGameRunning = false;
+        }
+
+        // Start game
+        function startGame() {
+            if (isGameRunning) return; // Prevent multiple starts
+            resetGame();
+            isGameRunning = true;
+            startScreen.style.display = 'none';
+            gameOverScreen.style.display = 'none';
+            document.getElementById('game-container').style.display = 'block';
+            startButton.disabled = true;
+
+            gameInterval = setInterval(() => {
+                timeLeft--;
+                timeDisplay.textContent = `Time: ${timeLeft}`;
+                if (timeLeft <= 0) {
+                    endGame();
+                }
+            }, 1000);
+
+            moleInterval = setInterval(popMole, moleSpeed);
+        }
+
+        // End game
+        function endGame() {
+            if (!isGameRunning) return;
+            isGameRunning = false;
+            clearInterval(gameInterval);
+            clearInterval(moleInterval);
+            moles.forEach(mole => mole.classList.remove('up'));
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('highScore', highScore);
+                highScoreDisplay.textContent = `High Score: ${highScore}`;
+            }
+            saveScore();
+            finalScoreDisplay.textContent = `Score: ${score}`;
+            document.getElementById('game-container').style.display = 'none';
+            gameOverScreen.style.display = 'block';
+            startButton.disabled = false;
+        }
+
+        // Difficulty selection
+        difficultyButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                difficultyButtons.forEach(btn => btn.classList.remove('active'));
+                button.classList.add('active');
+                moleSpeed = parseInt(button.dataset.speed);
+            });
+        });
+
+        // Sound toggle
+        soundToggle.addEventListener('click', () => {
+            soundOn = !soundOn;
+            soundToggle.textContent = `Sound: ${soundOn ? 'On' : 'Off'}`;
+        });
+
+        // Event listeners
+        startButton.addEventListener('click', startGame);
+        restartButton.addEventListener('click', () => {
+            resetGame();
+            startScreen.style.display = 'block';
+            gameOverScreen.style.display = 'none';
+        });
+    </script>
+</body>
+</html>
