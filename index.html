@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Whac-A-Mole: Full Version</title>
+    <title>Whac-A-Mole: Full Offline Version</title>
     <style>
         body {
             font-family: 'Comic Sans MS', Arial, sans-serif;
@@ -181,20 +181,19 @@
 
         // Auto-save score to leaderboard
         function saveScore() {
-            if (score > 0) { // Only save non-zero scores
-                const date = new Date().toLocaleString('en-US', { 
-                    year: 'numeric', 
-                    month: 'short', 
-                    day: 'numeric', 
-                    hour: '2-digit', 
-                    minute: '2-digit' 
-                });
-                leaderboard.push({ score, date });
-                leaderboard.sort((a, b) => b.score - a.score);
-                leaderboard = leaderboard.slice(0, 5); // Keep top 5 scores
-                localStorage.setItem('leaderboard', JSON.stringify(leaderboard));
-                updateLeaderboard();
-            }
+            if (score <= 0) return; // Skip zero or negative scores
+            const date = new Date().toLocaleString('en-US', { 
+                year: 'numeric', 
+                month: 'short', 
+                day: 'numeric', 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+            leaderboard.push({ score, date });
+            leaderboard.sort((a, b) => b.score - a.score);
+            leaderboard = leaderboard.slice(0, 5); // Keep top 5
+            localStorage.setItem('leaderboard', JSON.stringify(leaderboard));
+            updateLeaderboard();
         }
 
         // Update leaderboard display
@@ -217,7 +216,7 @@
                     scoreDisplay.textContent = `Score: ${score}`;
                     mole.classList.remove('up');
                     if (soundOn) {
-                        hitSound.currentTime = 0; // Reset sound to avoid overlap
+                        hitSound.currentTime = 0; // Prevent overlap
                         hitSound.play().catch(err => console.log('Sound play failed:', err));
                     }
                 }
@@ -236,17 +235,20 @@
         function resetGame() {
             if (gameInterval) clearInterval(gameInterval);
             if (moleInterval) clearInterval(moleInterval);
+            gameInterval = null;
+            moleInterval = null;
             moles.forEach(mole => mole.classList.remove('up'));
             score = 0;
             timeLeft = 30;
             scoreDisplay.textContent = `Score: ${score}`;
             timeDisplay.textContent = `Time: ${timeLeft}`;
             isGameRunning = false;
+            startButton.disabled = false;
         }
 
         // Start game
         function startGame() {
-            if (isGameRunning) return; // Prevent multiple starts
+            if (isGameRunning) return;
             resetGame();
             isGameRunning = true;
             startScreen.style.display = 'none';
@@ -271,6 +273,8 @@
             isGameRunning = false;
             clearInterval(gameInterval);
             clearInterval(moleInterval);
+            gameInterval = null;
+            moleInterval = null;
             moles.forEach(mole => mole.classList.remove('up'));
             if (score > highScore) {
                 highScore = score;
@@ -297,7 +301,15 @@
         soundToggle.addEventListener('click', () => {
             soundOn = !soundOn;
             soundToggle.textContent = `Sound: ${soundOn ? 'On' : 'Off'}`;
+            localStorage.setItem('soundOn', soundOn); // Persist sound setting
         });
+
+        // Load saved sound setting
+        const savedSound = localStorage.getItem('soundOn');
+        if (savedSound !== null) {
+            soundOn = savedSound === 'true';
+            soundToggle.textContent = `Sound: ${soundOn ? 'On' : 'Off'}`;
+        }
 
         // Event listeners
         startButton.addEventListener('click', startGame);
